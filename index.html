@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>波の干渉 3Dシミュレーター</title>
+<style>
+:root{--bg:#f4f6fa;--panel:#ffffff;--text:#1b2433;--sub:#5a6578;--line:#d5dbe6;--accent:#2563eb;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f141c;--panel:#18202c;--text:#e8edf6;--sub:#9aa7bd;--line:#2c3748;--accent:#6ea0ff}}
+:root[data-theme="dark"]{--bg:#0f141c;--panel:#18202c;--text:#e8edf6;--sub:#9aa7bd;--line:#2c3748;--accent:#6ea0ff}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;display:flex;flex-direction:column;overflow:hidden}
+#stage{flex:1;min-height:200px;position:relative;touch-action:none;cursor:grab}
+#stage:active{cursor:grabbing}
+canvas{display:block;width:100%;height:100%}
+#hint{position:absolute;left:10px;top:8px;font-size:12px;color:var(--sub);background:var(--panel);border:1px solid var(--line);padding:4px 8px;border-radius:8px;pointer-events:none}
+#legend{position:absolute;right:10px;top:8px;font-size:11px;color:var(--sub);background:var(--panel);border:1px solid var(--line);padding:4px 8px;border-radius:8px;pointer-events:none;display:flex;align-items:center;gap:6px}
+#legend i{display:inline-block;width:70px;height:8px;border-radius:4px;background:linear-gradient(90deg,#1e4fd0,#e6edf5,#e2492f)}
+#panel{background:var(--panel);border-top:1px solid var(--line);padding:10px 14px 12px;max-height:46%;overflow-y:auto}
+.row{display:grid;grid-template-columns:92px 1fr 54px;align-items:center;gap:8px;font-size:13px;margin:4px 0}
+.row output{text-align:right;color:var(--sub);font-variant-numeric:tabular-nums}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.btns{display:flex;gap:8px;margin:8px 0 6px;flex-wrap:wrap}
+button{font:inherit;font-size:13px;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text);cursor:pointer}
+button:active{background:var(--accent);color:#fff}
+#info{font-size:12.5px;color:var(--sub);line-height:1.6;margin-top:4px}
+#info b{color:var(--text)}
+#pd{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);display:none;pointer-events:none;white-space:nowrap;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:6px 14px;font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
+.tg{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;margin:6px 0}
+.tg label{display:flex;align-items:center;gap:4px;cursor:pointer}
+.tg input{accent-color:var(--accent)}
+#ruler{position:absolute;left:0;right:0;bottom:8px;display:flex;justify-content:center;pointer-events:none}
+#rbox{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px 18px 24px;width:min(92%,520px);text-align:center}
+#rtxt{font-size:12px;color:var(--text)}
+#rbar{position:relative;height:0;border-top:2px solid var(--text);margin:28px auto 0}
+.tk{position:absolute;top:0;width:1px;height:6px;background:var(--text)}
+.tk.mj{width:2px;height:12px}
+.tl{position:absolute;top:14px;transform:translateX(-50%);font-size:11px;color:var(--text);white-space:nowrap}
+.end{position:absolute;top:-26px;transform:translateX(-50%);font-size:12px;font-weight:700;color:var(--accent)}
+select{font:inherit;font-size:13px;padding:5px 6px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text)}
+#meas{font-size:13px;margin-top:8px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;line-height:1.7;color:var(--text)}
+#meas .btns{margin:4px 0}
+#meas label{display:inline-flex;align-items:center;gap:4px}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="c"></canvas>
+  <div id="hint">ドラッグで回転 ／ ホイール・ピンチで拡大縮小 ／ クリックで点P（点はドラッグで移動）</div>
+  <div id="legend">谷<i></i>山</div>
+  <div id="pd"></div>
+  
+</div>
+<div id="panel">
+  <div class="row"><label for="lam">波長 λ</label><input id="lam" type="range" min="1.5" max="7" step="0.1" value="3"><output id="lamO"></output></div>
+  <div class="row"><label for="dist">波源の間隔 d</label><input id="dist" type="range" min="1" max="14" step="0.1" value="6"><output id="distO"></output></div>
+  <div class="row"><label for="ph">位相</label><select id="ph" style="width:100%"><option value="0" selected>同位相（φ = 0°）</option><option value="180">逆位相（φ = 180°）</option></select><output id="phO"></output></div>
+  <div class="tg">
+    <label style="color:#d97706"><input type="checkbox" id="cA" checked>腹線（強め合い）</label>
+    <label style="color:#16a34a"><input type="checkbox" id="cN" checked>節線（弱め合い）</label>
+    <label><input type="checkbox" id="cC" checked><span style="color:#7c3aed">S₁の波面</span>／<span style="color:#ec4899">S₂の波面</span>（実線＝山・破線＝谷）</label>
+    <label><input type="checkbox" id="cDim" checked>波源間距離の表示</label>
+  </div>
+  <div class="btns">
+    <button id="back" title="1コマ戻る（←キー）">⏪ 1コマ戻る</button>
+    <button id="play">⏸ 一時停止</button>
+    <button id="fwd" title="1コマ進む（→キー）">1コマ進む ⏩</button>
+    <select id="stp" title="コマ送りの幅"><option value="4">T/4</option><option value="8" selected>T/8</option><option value="16">T/16</option></select>
+    <span id="tt" style="font-size:12.5px;color:var(--sub);align-self:center;font-variant-numeric:tabular-nums"></span>
+    <button id="mode">2D表示にする</button>
+    <button id="top">真上から見る</button>
+    <button id="side">横から見る</button>
+    <button id="reset">視点リセット</button>
+  </div>
+  <div id="info"></div>
+  <div id="cnt" style="font-size:12.5px;color:var(--sub);margin-top:2px"></div>
+  <div id="meas"><div><b>距離の測定</b>：平面をクリックすると点Pが出ます。各波源（S₁＝紫、S₂＝ピンク）から点Pまで、半透明の物差しが自動で伸びます。太い目盛り＝1λ、細かい目盛り＝0.1λ。点Pは黒い点をドラッグして動かせます（物差しも一緒に動きます）。点Pの位置を読み取って S₁P と S₂P を測ってみよう。</div><div class="btns"><button id="clr">点Pを消す</button><label><input type="checkbox" id="cD" checked>数値・解説を表示</label></div><div id="rd"></div></div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+const stage=document.getElementById('stage'),canvas=document.getElementById('c');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(45,1,0.1,200);
+const amb=new THREE.AmbientLight(0xffffff,0.65);scene.add(amb);
+const dl=new THREE.DirectionalLight(0xffffff,0.7);dl.position.set(8,18,10);scene.add(dl);
+
+const SIZE=26,N=110;
+const geo=new THREE.PlaneGeometry(SIZE,SIZE,N,N);geo.rotateX(-Math.PI/2);
+const pos=geo.attributes.position,cnt=pos.count;
+const col=new Float32Array(cnt*3);geo.setAttribute('color',new THREE.BufferAttribute(col,3));
+const mesh=new THREE.Mesh(geo,new THREE.MeshPhongMaterial({vertexColors:true,side:THREE.DoubleSide,shininess:40}));
+scene.add(mesh);
+
+const sMat=new THREE.MeshBasicMaterial({color:0xffb020});
+const s1=new THREE.Mesh(new THREE.SphereGeometry(0.4,16,16),sMat),s2=new THREE.Mesh(new THREE.SphereGeometry(0.4,16,16),sMat);
+scene.add(s1,s2);
+
+const $=id=>document.getElementById(id);
+let lam=3,d=6,phi=0,playing=true,t=0,last=performance.now();
+const A=0.55,V=2.2;
+let mode2d=false,hs=1,P=null,drag=null,moved=false,sx0=0,sy0=0,gOff=[0,0],rkLam=0;
+const tg=new THREE.Vector3(),RW=1.7,rk={ox:-6,oz:10,a:0,len:12};
+
+// ---- 2D/3D切替・測定点P・物差し ----
+const ray=new THREE.Raycaster(),gp=new THREE.Plane(new THREE.Vector3(0,1,0),0),hitV=new THREE.Vector3();
+const flat=(c,o)=>new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:o,depthTest:false,side:THREE.DoubleSide});
+const rmat=new THREE.MeshBasicMaterial({transparent:true,opacity:.95,depthTest:false,side:THREE.DoubleSide});
+const rmesh=new THREE.Mesh(new THREE.PlaneGeometry(1,1),rmat);rmesh.renderOrder=8;rmesh.frustumCulled=false;
+const hmesh=new THREE.Mesh(new THREE.CircleGeometry(0.8,28).rotateX(-Math.PI/2),flat(0x2563eb,.9));hmesh.renderOrder=9;
+const pm=new THREE.Mesh(new THREE.SphereGeometry(0.14,16,12),flat(0x111827,1)),pr=new THREE.Mesh(new THREE.RingGeometry(0.2,0.3,28).rotateX(-Math.PI/2),flat(0xffffff,1));
+pm.renderOrder=10;pr.renderOrder=9;pm.visible=pr.visible=false;
+scene.add(pm,pr);
+// 波源間距離の寸法線（半透明・図中表示）
+const dimMat=new THREE.LineBasicMaterial({color:0x475569,transparent:true,opacity:.6,depthTest:false});
+const dimLine=new THREE.LineSegments(new THREE.BufferGeometry(),dimMat);dimLine.renderOrder=7;dimLine.frustumCulled=false;
+const dimSpr=new THREE.Sprite(new THREE.SpriteMaterial({transparent:true,opacity:.7,depthTest:false}));dimSpr.renderOrder=7;
+const dimRul=new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.MeshBasicMaterial({transparent:true,opacity:.6,depthTest:false,side:THREE.DoubleSide}));dimRul.renderOrder=7;dimRul.frustumCulled=false;
+scene.add(dimLine,dimSpr,dimRul);
+// 点Pの近くに出す経路差の表示
+const pdSpr={position:{set(){}},set visible(v){$('pd').style.display=v?'block':'none'}};
+function setPD(l1,l2,j){
+  $('pd').textContent=l1;pdSpr.visible=true;return;
+  const cv=document.createElement('canvas');cv.width=700;cv.height=80;const g=cv.getContext('2d');
+  g.fillStyle='rgba(255,255,255,.93)';g.strokeStyle='#64748b';g.lineWidth=4;g.fillRect(2,2,696,76);g.strokeRect(2,2,696,76);
+  g.textAlign='center';g.textBaseline='middle';
+  g.fillStyle='#1e293b';g.font='bold 34px sans-serif';g.fillText(l1,350,41);
+  
+  if(pdSpr.material.map)pdSpr.material.map.dispose();
+  pdSpr.material.map=new THREE.CanvasTexture(cv);pdSpr.material.needsUpdate=true;pdSpr.scale.set(8.2,0.94,1);pdSpr.visible=true;
+}
+function drawDim(){
+  const zl=-2.2,v=[],seg=(a,b,c,e)=>v.push(a,0.03,b,c,0.03,e);
+  
+  
+  
+  
+  dimLine.geometry.dispose();dimLine.geometry=new THREE.BufferGeometry();dimLine.geometry.setAttribute('position',new THREE.Float32BufferAttribute(v,3));
+  const W=1024,Hh=Math.max(40,Math.round(W*1.4/d)),c2=document.createElement('canvas');c2.width=W;c2.height=Hh;
+  const q=c2.getContext('2d'),u=W/d,N=Math.floor(d/lam*10+1e-6);
+  q.fillStyle='#e2e8f0';q.fillRect(0,0,W,Hh);q.strokeStyle='#334155';q.fillStyle='#1e293b';q.lineWidth=Math.max(1.5,Hh*0.025);q.font='bold '+Math.round(Hh*0.24)+'px sans-serif';
+  for(let i=0;i<=N;i++){
+    const x=Math.min(W-1,Math.max(1,i*lam/10*u)),mj=i%10===0;
+    q.beginPath();q.moveTo(x,0);q.lineTo(x,Hh*(mj?0.5:i%5===0?0.32:0.18));q.stroke();
+    if(i%10===5){const f=q.font;q.font='bold '+Math.round(Hh*0.2)+'px sans-serif';q.textAlign=x>W-40?'right':'center';q.fillText(i/10+(lam/2*u>70?'λ':''),x,Hh*0.85);q.font=f}
+    if(mj&&i>0){q.textAlign=x>W-50?'right':'center';q.fillText(i/10+'λ',x,Hh*0.85)}
+  }
+  q.strokeRect(0,0,W,Hh);
+  if(dimRul.material.map)dimRul.material.map.dispose();
+  dimRul.material.map=new THREE.CanvasTexture(c2);dimRul.material.needsUpdate=true;
+  dimRul.geometry.dispose();dimRul.geometry=new THREE.PlaneGeometry(d,1.4).rotateX(-Math.PI/2);dimRul.position.set(0,0.035,0.7);
+  const cv=document.createElement('canvas');cv.width=640;cv.height=100;
+  const g=cv.getContext('2d'),s='波源間距離 d = '+(d/lam).toFixed(2)+' λ';
+  g.font='bold 44px sans-serif';g.textAlign='center';g.textBaseline='middle';g.lineJoin='round';g.lineWidth=8;g.strokeStyle='rgba(255,255,255,.95)';g.fillStyle='#1e293b';
+  g.strokeText(s,320,50);g.fillText(s,320,50);
+  if(dimSpr.material.map)dimSpr.material.map.dispose();
+  dimSpr.material.map=new THREE.CanvasTexture(cv);dimSpr.material.needsUpdate=true;
+  dimSpr.scale.set(8,1.25,1);dimSpr.position.set(0,0.3,-1.4);
+}
+function mkLine(c){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(6),3));const l=new THREE.Line(g,new THREE.LineBasicMaterial({color:c,depthTest:false}));l.frustumCulled=false;l.renderOrder=6;l.visible=false;scene.add(l);return l}
+const dl1=mkLine(0x7c3aed),dl2=mkLine(0xec4899);
+const rl=[0,1].map(()=>{const mat=new THREE.MeshBasicMaterial({transparent:true,opacity:.7,depthTest:false,side:THREE.DoubleSide});const m=new THREE.Mesh(new THREE.PlaneGeometry(1,1),mat);m.renderOrder=8;m.frustumCulled=false;m.visible=false;scene.add(m);return {m,mat,key:''}});
+// 波源から点Pへ伸びる半透明の物差し（目盛り1λ、細かい目盛り0.1λ）
+function buildAuto(o,sx,bg){
+  const dx=P.x-sx,r=Math.hypot(dx,P.z),a=Math.atan2(P.z,dx),n=Math.floor(r/lam)+1,len=n*lam,fl=Math.cos(a)<0,key=Math.random();
+  const sn=Math.sin(a),sg=Math.abs(sn)<1e-6?(sx<0?1:-1):-Math.sign(sx*sn),tb=sg<0;
+  if(o.key!==key){
+    o.key=key;
+    const W=n>10?2048:1024,Hh=Math.max(40,Math.round(W*RW/len)),cv=document.createElement('canvas');cv.width=W;cv.height=Hh;
+    const g=cv.getContext('2d'),u=W/len,N=n*10;
+    g.fillStyle=bg;g.fillRect(0,0,W,Hh);g.strokeStyle='#3b2f63';g.fillStyle='#2a1f4d';g.lineWidth=Math.max(1.5,Hh*0.025);g.font='bold '+Math.round(Hh*0.27)+'px sans-serif';
+    for(let i=0;i<=N;i++){
+      const x=Math.min(W-1,Math.max(1,i*lam/10*u)),mj=i%10===0;
+      const y0=tb?Hh:0,sgn=tb?-1:1;g.beginPath();g.moveTo(x,y0);g.lineTo(x,y0+sgn*Hh*(mj?0.26:i%5===0?0.18:0.1));g.stroke();
+      if(i%10===5){g.save();g.translate(x,Hh*(tb?(fl?0.485:0.68):(fl?0.33:0.52)));if(fl)g.rotate(Math.PI);g.font='bold '+Math.round(Hh*0.2)+'px sans-serif';g.textAlign='center';g.fillText(i/10+(lam/2*u>70?'λ':''),0,0);g.restore()}
+      if(mj){
+        let al=i===0?'left':i===N?'right':'center';if(fl)al=al==='left'?'right':al==='right'?'left':al;
+        g.save();g.translate(x+(i===0?4:i===N?-4:0),Hh*(tb?(fl?0.485:0.68):(fl?0.33:0.52)));if(fl)g.rotate(Math.PI);
+        g.textAlign=al;g.fillText(i/10+'λ',0,0);g.restore();
+      }
+    }
+    g.strokeRect(0,0,W,Hh);
+    const nx=Math.min(W-2,r*u);
+    g.strokeStyle='#dc2626';g.lineWidth=Math.max(2,Hh*0.04);g.beginPath();g.moveTo(nx,0);g.lineTo(nx,Hh);g.stroke();
+    if($('cD').checked){
+      const s=(r/lam).toFixed(2)+'λ',fs=Math.round(Hh*0.3);g.font='bold '+fs+'px ui-monospace,Menlo,Consolas,monospace';
+      const bw=g.measureText(s).width+fs*0.8,bh=fs*1.3,cx=Math.max(bw/2+2,Math.min(W-bw/2-2,nx)),cy=Hh*(tb?0.24:0.76);
+      g.save();g.translate(cx,cy);if(fl)g.rotate(Math.PI);
+      g.fillStyle='rgba(255,255,255,.95)';g.strokeStyle='#dc2626';g.lineWidth=Math.max(2,Hh*0.025);
+      g.fillRect(-bw/2,-bh/2,bw,bh);g.strokeRect(-bw/2,-bh/2,bw,bh);
+      g.fillStyle='#b91c1c';g.textAlign='center';g.textBaseline='middle';g.fillText(s,0,0);g.restore();
+    }
+    if(o.mat.map)o.mat.map.dispose();o.mat.map=new THREE.CanvasTexture(cv);o.mat.needsUpdate=true;
+    o.m.geometry.dispose();o.m.geometry=new THREE.PlaneGeometry(len,RW).rotateX(-Math.PI/2);
+  }
+  o.m.position.set(sx+Math.cos(a)*len/2-sn*sg*RW/2,0.045,sn*len/2+Math.cos(a)*sg*RW/2);o.m.rotation.y=-a;o.m.visible=true;
+}
+function setLine(l,x1,z1,x2,z2){const a=l.geometry.attributes.position.array;a[0]=x1;a[1]=0.05;a[2]=z1;a[3]=x2;a[4]=0.05;a[5]=z2;l.geometry.attributes.position.needsUpdate=true;l.visible=true}
+function buildRuler(){
+  const n=Math.max(1,Math.min(10,Math.floor(24/lam)));rk.len=n*lam;
+  if(!rk.set){rk.ox=-rk.len/2;rk.oz=10;rk.set=1}
+  const cv=document.createElement('canvas');cv.width=1024;cv.height=Math.round(1024*RW/rk.len);
+  const g=cv.getContext('2d'),W=cv.width,Hh=cv.height,u=W/rk.len;
+  g.fillStyle='#fdf3c8';g.fillRect(0,0,W,Hh);
+  g.strokeStyle='#5b4a00';g.fillStyle='#3a2f00';g.lineWidth=Math.max(1.5,Hh*0.025);
+  g.font='bold '+Math.round(Hh*0.24)+'px sans-serif';
+  for(let i=0;i<=n*10;i++){
+    const x=Math.min(W-1,Math.max(1,i*lam/10*u)),mj=i%10===0,hf=i%5===0;
+    g.beginPath();g.moveTo(x,0);g.lineTo(x,Hh*(mj?0.5:hf?0.32:0.18));g.stroke();
+    if(mj){g.textAlign=i===0?'left':i===n*10?'right':'center';g.fillText(i/10+'λ',x+(i===0?4:i===n*10?-4:0),Hh*0.85)}
+  }
+  g.strokeRect(0,0,W,Hh);
+  if(rmat.map)rmat.map.dispose();rmat.map=new THREE.CanvasTexture(cv);rmat.needsUpdate=true;
+  rmesh.geometry.dispose();rmesh.geometry=new THREE.PlaneGeometry(rk.len,RW).rotateX(-Math.PI/2);
+  placeRuler();
+}
+function placeRuler(){
+  const c=Math.cos(rk.a),s=Math.sin(rk.a);
+  rmesh.position.set(rk.ox+c*rk.len/2,0.04,rk.oz+s*rk.len/2);rmesh.rotation.y=-rk.a;
+  hmesh.position.set(rk.ox+c*(rk.len+1),0.04,rk.oz+s*(rk.len+1));
+}
+function updMeasure(){
+  const el=$('rd');$('info').style.display=$('cD').checked?'':'none';
+  if(!P){pdSpr.visible=false;dl1.visible=dl2.visible=false;rl[0].m.visible=rl[1].m.visible=false;el.textContent='まだ点Pがありません。平面をクリックしてください。';return}
+  const r1=Math.hypot(P.x+d/2,P.z),r2=Math.hypot(P.x-d/2,P.z);
+  setLine(dl1,-d/2,0,P.x,P.z);setLine(dl2,d/2,0,P.x,P.z);buildAuto(rl[0],-d/2,'#e4d7fb');buildAuto(rl[1],d/2,'#fbd9ea');
+  if(!$('cD').checked){pdSpr.visible=false;el.textContent='点Pを置きました。物差しで S₁P と S₂P を測ってみよう。';return}
+  const q=(r1-r2)/lam-phi/(2*Math.PI),fr=q-Math.floor(q),
+    j=Math.min(fr,1-fr)<0.04?'強め合い（腹線上）':Math.abs(fr-0.5)<0.04?'弱め合い（節線上）':'どちらでもない中間';
+  setPD('経路差 |S₁P − S₂P| = '+(Math.abs(r1-r2)/lam).toFixed(2)+'λ','→ '+j,j);pdSpr.position.set(P.x,0.4,P.z<-SIZE/2+3?P.z+1.6:P.z-1.6);
+  el.innerHTML='<span style="color:#7c3aed">S₁P = <b>'+(r1/lam).toFixed(2)+'λ</b></span>（'+r1.toFixed(2)+'）　<span style="color:#ec4899">S₂P = <b>'+(r2/lam).toFixed(2)+'λ</b></span>（'+r2.toFixed(2)+'）<br>経路差 |S₁P−S₂P| = <b>'+(Math.abs(r1-r2)/lam).toFixed(2)+'λ</b> → <b>'+j+'</b>';
+}
+
+
+$('clr').onclick=()=>{P=null;pm.visible=pr.visible=false;updMeasure()};
+$('cD').onchange=updMeasure;
+function world(e){
+  const r=stage.getBoundingClientRect();
+  ray.setFromCamera({x:(e.clientX-r.left)/r.width*2-1,y:-((e.clientY-r.top)/r.height)*2+1},camera);
+  return ray.ray.intersectPlane(gp,hitV)?hitV.clone():null;
+}
+function grab(e){
+  drag='cam';moved=false;sx0=e.clientX;sy0=e.clientY;
+  const p=world(e);if(P&&p&&Math.hypot(p.x-P.x,p.z-P.z)<1.4)drag='pt';
+  
+  
+  
+  
+}
+function dragMove(e,p){
+  if(Math.hypot(e.clientX-sx0,e.clientY-sy0)>5)moved=true;
+  if(drag==='pt'){const w=world(e);if(w){const L=SIZE/2;P={x:Math.max(-L,Math.min(L,w.x)),z:Math.max(-L,Math.min(L,w.z))};pm.position.set(P.x,0.05,P.z);pr.position.copy(pm.position);updMeasure()}return}
+  if(drag==='ruler'||drag==='rot'){
+    const w=world(e);if(!w)return;
+    if(drag==='ruler'){rk.ox=w.x-gOff[0];rk.oz=w.z-gOff[1]}else rk.a=Math.atan2(w.z-rk.oz,w.x-rk.ox);
+    placeRuler();return;
+  }
+  if(mode2d){const k=2*R*Math.tan(camera.fov*Math.PI/360)/stage.clientHeight;tg.x-=(e.clientX-p[0])*k;tg.z-=(e.clientY-p[1])*k}
+  else{th-=(e.clientX-p[0])*0.008;ph-=(e.clientY-p[1])*0.008}
+}
+function place(e){
+  const w=world(e);if(!w||Math.abs(w.x)>SIZE/2||Math.abs(w.z)>SIZE/2)return;
+  P={x:w.x,z:w.z};pm.position.set(w.x,0.05,w.z);pr.position.copy(pm.position);pm.visible=pr.visible=true;updMeasure();
+}
+function setMode(m){
+  mode2d=m;hs=m?0:1;amb.intensity=m?1:0.65;dl.intensity=m?0:0.7;
+  tg.set(0,0,0);if(m)R=32;else{th=home.th;ph=home.ph;R=home.r}
+  $('mode').textContent=m?'3D表示にする':'2D表示にする';
+  $('hint').textContent=(m?'ドラッグで移動':'ドラッグで回転')+' ／ ホイール・ピンチで拡大縮小 ／ クリックで点P（点はドラッグで移動）';
+  setCam();
+}
+$('mode').onclick=()=>setMode(!mode2d);
+
+// ---- overlays: 腹線・節線、同心円の波面、物差し ----
+renderer.localClippingEnabled=true;
+const H=SIZE/2;
+const clip=[new THREE.Plane(new THREE.Vector3(1,0,0),H),new THREE.Plane(new THREE.Vector3(-1,0,0),H),new THREE.Plane(new THREE.Vector3(0,0,1),H),new THREE.Plane(new THREE.Vector3(0,0,-1),H)];
+const mk=c=>new THREE.LineBasicMaterial({color:c,clippingPlanes:clip,depthTest:false});
+const mAnti=mk(0xf59e0b),mNode=mk(0x22c55e),mC1=mk(0x7c3aed),mC2=mk(0xec4899);
+const mkd=c=>new THREE.LineDashedMaterial({color:c,dashSize:0.5,gapSize:0.35,clippingPlanes:clip,depthTest:false}),mD1=mkd(0x7c3aed),mD2=mkd(0xec4899);
+function waveY(x,z,tt){
+  const k=2*Math.PI/lam,w=k*V,r1=Math.hypot(x+d/2,z),r2=Math.hypot(x-d/2,z);
+  return A*(Math.sin(k*r1-w*tt)/Math.sqrt(1+0.12*r1)+Math.sin(k*r2-w*tt+phi)/Math.sqrt(1+0.12*r2));
+}
+const hypA=new THREE.Group(),hypN=new THREE.Group();scene.add(hypA,hypN);
+let hl=[];
+function buildHyp(){
+  [hypA,hypN].forEach(g=>g.children.slice().forEach(o=>{g.remove(o);o.geometry.dispose()}));
+  hl=[];const off=phi/(2*Math.PI),M=Math.ceil(d/lam)+2,n=161;let na=0,nn=0;
+  for(let m=-M;m<=M;m++)for(const kind of [0,1]){
+    const c=(m+off+(kind?0.5:0))*lam;
+    if(Math.abs(c)>=d-1e-6)continue;
+    const a=Math.abs(c)/2,b=Math.sqrt(d*d/4-a*a),sg=Math.sign(c);
+    const pts=new Float32Array(n*2),arr=new Float32Array(n*3);
+    for(let i=0;i<n;i++){const u=-3+6*i/(n-1);pts[i*2]=sg*a*Math.cosh(u);pts[i*2+1]=b*Math.sinh(u);}
+    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(arr,3));
+    const l=new THREE.Line(g,kind?mNode:mAnti);l.frustumCulled=false;l.renderOrder=5;
+    const grp=kind?hypN:hypA;grp.add(l);hl.push({grp,pts,arr,g,n});
+    kind?nn++:na++;
+  }
+  return {a:na,n:nn};
+}
+const CN=128,CMAX=30;
+function mkCircles(mat){const r=[];for(let j=0;j<CMAX;j++){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(new Float32Array((CN+1)*3),3));const l=new THREE.Line(g,mat);l.frustumCulled=false;l.visible=false;l.renderOrder=5;scene.add(l);r.push(l)}return r}
+const circ1=mkCircles(mC1),circ2=mkCircles(mC2),circ1t=mkCircles(mD1),circ2t=mkCircles(mD2);
+function updCircles(arr,sx,off,half){
+  const show=$('cC').checked,r0=(((V*t+lam/4+(half?lam/2:0)-off)%lam)+lam)%lam;
+  for(let j=0;j<CMAX;j++){
+    const r=r0+j*lam,l=arr[j];
+    if(!show||r>26||r<0.08){l.visible=false;continue}
+    l.visible=true;const a=l.geometry.attributes.position.array;
+    for(let i=0;i<=CN;i++){const q=i/CN*2*Math.PI,x=sx+r*Math.cos(q),z=r*Math.sin(q);a[i*3]=x;a[i*3+1]=0.03;a[i*3+2]=z}
+    l.geometry.attributes.position.needsUpdate=true;if(l.material.isLineDashedMaterial)l.computeLineDistances();
+  }
+}
+function updOverlay(){
+  hypA.visible=$('cA').checked;hypN.visible=$('cN').checked;
+  for(const e of hl){
+    if(!e.grp.visible)continue;
+    for(let i=0;i<e.n;i++){const x=e.pts[i*2],z=e.pts[i*2+1];e.arr[i*3]=x;e.arr[i*3+1]=0.03;e.arr[i*3+2]=z}
+    e.g.attributes.position.needsUpdate=true;
+  }
+  const o2=phi*lam/(2*Math.PI);updCircles(circ1,-d/2,0,0);updCircles(circ1t,-d/2,0,1);updCircles(circ2,d/2,o2,0);updCircles(circ2t,d/2,o2,1);
+  $('tt').textContent='t = '+(t*V/lam).toFixed(2)+' T';
+  dimRul.visible=dimSpr.visible=dimLine.visible=$('cDim').checked;
+  s1.position.y=0.1+hs*waveY(-d/2,0,t);s2.position.y=0.1+hs*waveY(d/2,0,t);
+}
+function drawRuler(){
+  const bar=$('rbar');bar.style.width=(d/14*100)+'%';
+  let h='';const n=Math.floor(d/lam*2+1e-6);
+  for(let i=0;i<=n;i++){const p=i*lam/2/d*100,mj=i%2===0;h+='<span class="tk'+(mj?' mj':'')+'" style="left:'+p+'%"></span>';if(mj&&i>0)h+='<span class="tl" style="left:'+p+'%">'+(i/2)+'λ</span>';}
+  bar.innerHTML=h+'<span class="end" style="left:0">S₁</span><span class="end" style="left:100%">S₂</span>';
+  $('rtxt').textContent='波源間距離 d = '+(d/lam).toFixed(2)+' λ （λ = '+lam.toFixed(1)+'、d = '+d.toFixed(1)+'）';
+}
+function readUI(){
+  lam=+$('lam').value;d=+$('dist').value;phi=+$('ph').value*Math.PI/180;
+  $('lamO').textContent=lam.toFixed(1);$('distO').textContent=d.toFixed(1);$('phO').textContent='';
+  s1.position.set(-d/2,0.4,0);s2.position.set(d/2,0.4,0);
+  const cn=buildHyp();drawDim();updMeasure();
+  $('cnt').innerHTML='この設定：腹線 <b>'+cn.a+'</b> 本、節線 <b>'+cn.n+'</b> 本（実線の円＝山、破線の円＝谷。実線どうし・破線どうしの交点が強め合い、実線と破線の交点が弱め合い）';
+  const m=Math.floor(d/lam*2)+1;
+  $('info').innerHTML=phi===0
+    ?'同位相の2波源：<b>経路差 |r₁−r₂| = mλ</b> で強め合い（山と山が重なる）、<b>(m+½)λ</b> で弱め合い（節線）。'
+    :'逆位相の2波源：同位相のときと比べて、強め合う場所と弱め合う場所が入れ替わります。中央の線は節線になります。';
+}
+['lam','dist','ph'].forEach(i=>$(i).addEventListener('input',readUI));
+readUI();
+
+function stops(v){ // v in [-1,1]
+  const a=[0.12,0.31,0.82],b=[0.90,0.93,0.96],c=[0.89,0.29,0.18];
+  let u,p,q;
+  if(v<0){u=v+1;p=a;q=b}else{u=v;p=b;q=c}
+  return [p[0]+(q[0]-p[0])*u,p[1]+(q[1]-p[1])*u,p[2]+(q[2]-p[2])*u];
+}
+function update(){
+  const k=2*Math.PI/lam,w=k*V,x1=-d/2,x2=d/2;
+  for(let i=0;i<cnt;i++){
+    const x=pos.getX(i),z=pos.getZ(i);
+    const r1=Math.hypot(x-x1,z),r2=Math.hypot(x-x2,z);
+    const y=A*(Math.sin(k*r1-w*t)/Math.sqrt(1+0.12*r1)+Math.sin(k*r2-w*t+phi)/Math.sqrt(1+0.12*r2));
+    pos.setY(i,y*hs);
+    let v=Math.max(-1,Math.min(1,y/(A*1.5)));
+    const c=stops(v);col[i*3]=c[0];col[i*3+1]=c[1];col[i*3+2]=c[2];
+  }
+  pos.needsUpdate=true;geo.attributes.color.needsUpdate=true;geo.computeVertexNormals();
+}
+
+// camera control (drag to orbit)
+const home={th:0.6,ph:0.95,r:34};
+let th=home.th,ph=home.ph,R=home.r;
+function setCam(){
+  if(mode2d){R=Math.max(12,Math.min(70,R));camera.up.set(0,0,-1);camera.position.set(tg.x,R,tg.z);camera.lookAt(tg.x,0,tg.z);return}
+  camera.up.set(0,1,0);
+  ph=Math.max(0.02,Math.min(Math.PI/2-0.02,ph));R=Math.max(12,Math.min(70,R));
+  camera.position.set(R*Math.sin(ph)*Math.sin(th),R*Math.cos(ph),R*Math.sin(ph)*Math.cos(th));
+  camera.lookAt(0,0,0);
+}
+const ptrs=new Map();let pinch=0;
+stage.addEventListener('pointerdown',e=>{stage.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,[e.clientX,e.clientY]);if(ptrs.size===1)grab(e);else{drag='cam';moved=true}if(ptrs.size===2){const [a,b]=[...ptrs.values()];pinch=Math.hypot(a[0]-b[0],a[1]-b[1])}});
+stage.addEventListener('pointermove',e=>{
+  if(!ptrs.has(e.pointerId))return;
+  const p=ptrs.get(e.pointerId);
+  if(ptrs.size===1)dragMove(e,p);
+  ptrs.set(e.pointerId,[e.clientX,e.clientY]);
+  if(ptrs.size===2){const [a,b]=[...ptrs.values()];const dd=Math.hypot(a[0]-b[0],a[1]-b[1]);R*=pinch/dd;pinch=dd;}
+  setCam();
+});
+const up=e=>{if(ptrs.size===1&&drag==='cam'&&!moved&&e.type==='pointerup')place(e);ptrs.delete(e.pointerId);drag=null};
+stage.addEventListener('pointerup',up);stage.addEventListener('pointercancel',up);
+stage.addEventListener('wheel',e=>{e.preventDefault();R*=1+e.deltaY*0.001;setCam()},{passive:false});
+
+function go(a,b,r){th=a;ph=b;R=r;setCam()}
+$('top').onclick=()=>{if(mode2d)setMode(false);go(0,0.02,40)};
+$('side').onclick=()=>{if(mode2d)setMode(false);go(0,1.45,32)};
+$('reset').onclick=()=>{tg.set(0,0,0);if(mode2d){R=32;setCam()}else go(home.th,home.ph,home.r)};
+function setPlay(p){playing=p;$('play').textContent=p?'⏸ 一時停止':'▶ 再生'}
+function step(s){setPlay(false);t+=s*(lam/V)/(+$('stp').value)}
+$('play').onclick=()=>setPlay(!playing);
+$('back').onclick=()=>step(-1);$('fwd').onclick=()=>step(1);
+addEventListener('keydown',e=>{const tn=e.target.tagName,ty=e.target.type;
+  if(e.key==='ArrowLeft'||e.key==='ArrowRight'){if(tn==='SELECT'||ty==='range')return;step(e.key==='ArrowLeft'?-1:1);e.preventDefault()}
+  else if(e.key===' '&&tn==='BODY'){setPlay(!playing);e.preventDefault()}});
+
+function resize(){
+  const w=stage.clientWidth,h=stage.clientHeight;
+  renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage);resize();setCam();
+
+function loop(now){
+  const dt=(now-last)/1000;last=now;
+  if(playing)t+=Math.min(dt,0.05);
+  update();updOverlay();renderer.render(scene,camera);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
